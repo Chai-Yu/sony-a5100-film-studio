@@ -80,9 +80,14 @@ def main():
             continue
         assert p['family']=='fujifilm'
         exported=read_cube(ROOT/'output'/f'SonyProxy_{p["official_film"].replace(".","")}.cube')
+        # fit_luts.py writes the preview cube from the fitted matrix, before
+        # calibrate_camera.py scales the shipped matrix for the camera domain.
+        # The round-trip therefore belongs to matrix_fit, not the calibrated
+        # matrix; gamma is shared and unchanged by calibration.
+        mf=np.array(p.get('matrix_fit',m))
         # Grid nodes round-trip exactly, including cube boundaries.
         nodes=np.array([[0,0,0],[1,1,1],[.25,.5,.75]])
-        assert np.allclose(sample(exported,nodes),apply_model(nodes,m/1024,g/1023),atol=1e-6)
+        assert np.allclose(sample(exported,nodes),apply_model(nodes,mf/1024,g/1023),atol=1e-6)
     apks=list((ROOT/'output').glob('*.apk'))
     assert apks, 'No APK builds found'
     results={apk.name:dict(signed_entries=check_signature(apk),
