@@ -83,12 +83,12 @@ ItemId 分支，返回 `RAW与JPEG`/`RAW`（unicode 转义形式）。
 注入的 `filterQualityAvailability(v3,v6)` 重写 `v6`，`if-eqz v6` 据此把
 `rawjpeg`/`raw` 加入可用列表——与上游 v1.6.0 的解锁机制完全一致。
 
-## 未执行测试（待实机）
+## 实机验证（2026-09-22，kanzaki-chiya @ A7R2）
 
-- APK 安装与实机拍摄（RAW 是否真正落 ARW、滤镜画质、录像/回放稳定性）
-
-> ⚠️ **静态验证 ≠ RAW 能保存**：全部静态检查只证明 patch 注入正确、
-> 调用链闭合、签名有效；RAW 是否真正写 ARW 只能 A7R2 实机验证。
+- ✅ **RAW+JPEG 落盘**：「RAW与JPEG」实拍生成 `.ARW` 41.1 MB +
+  `.JPG` 10.3 MB，序号一致。RAW 写入能力证实。
+- 详见 `docs/raw-development/camera-validation.md` 实测记录；其余子项
+  （纯 RAW、滤镜切换、模式互斥、异常恢复）按清单补测。
 
 ## 完整构建验证（2026-09-22 补全）
 
@@ -154,4 +154,4 @@ python tools/build_apk.py --input inputs/base.apk --apktool inputs/apktool.jar \
 - ✅ 静态单元验证通过（菜单注入、控制器注入、查表注册、幂等性）
 - ✅ 真实 base.apk 端到端 patch 验证通过
 - ✅ **完整 17 滤镜构建通过**，`check_combined`/`check_build` 全绿，APK 已签名
-- ⏸ 相机安装 / RAW 实际保存 / ARW 解码 —— **待实机**（离线验证完成，可交付测试）
+- ✅ **实机验证通过**（A7R2）：RAW+JPEG 落 `.ARW` 41.1MB + `.JPG` 10.3MB
