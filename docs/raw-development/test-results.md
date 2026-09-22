@@ -4,7 +4,8 @@
 
 - 分支：`feature/raw-jpeg-a7r2`
 - 平台：Windows 11 / PowerShell 7 / Python 3
-- 关键缺失材料：`inputs/base.apk`（Ricoh v1.1.4 基础包）、
+- 关键缺失材料：`inputs/base.apk`（Ricoh v1.1.4 **成品 APK**
+  `PictureEffectPlus_Ricoh.apk`，SHA-256 `80cb4a54…`）、
   `inputs/apktool.jar`、`inputs/luts/`、`profiles/*.json`（构建产物）
 
 ## 已执行测试
@@ -60,8 +61,8 @@ ItemId 分支，返回 `RAW与JPEG`/`RAW`（unicode 转义形式）。
 
 ## 未执行测试（缺材料）
 
-以下测试需要基础 APK、Apktool、LUT 数据与签名私钥，当前 `inputs/` 为空，
-**未执行**：
+以下测试需要 Ricoh v1.1.4 成品 APK、Apktool、LUT 数据与签名私钥，当前
+`inputs/` 为空，**未执行**：
 
 - `tools/build_apk.py` 完整构建（`--input inputs/base.apk` …）
 - `tools/check_combined.py` 对真实解码产物的全套断言（含本次新增 RAW 断言）
@@ -72,6 +73,6 @@ ItemId 分支，返回 `RAW与JPEG`/`RAW`（unicode 转义形式）。
 
 - ✅ 代码审计通过（上游机制确认、锚点同源）
 - ✅ 静态单元验证通过（菜单注入、控制器注入、查表注册、幂等性）
-- ⏸ 静态集成测试（`check_combined.py`）—— 待基础 APK
-- ⏸ APK 构建 —— 待基础 APK + apktool + LUT + 签名私钥
-- ⏸ 相机安装 / RAW 实际保存 / ARW 解码 —— 待实机
+- ⏸ 静态集成测试（`check_combined.py`）—— 待 Ricoh v1.1.4 成品 APK
+- ⏸ APK 构建 —— 待 Ricoh v1.1.4 成品 APK + apktool + LUT + 签名私钥
+- ⏸ 相机安装 / RAW 实际保存 / ARW 解码 —— 待实机（静态测试通过 ≠ 能落 ARW）

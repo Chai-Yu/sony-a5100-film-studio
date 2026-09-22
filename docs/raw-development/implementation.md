@@ -9,7 +9,7 @@
   `DSC*.ARW`；JPEG 走当前选中的胶片模拟（RGB Matrix + Extended Gamma）。
 - **RAW**（`Value="raw"`）：只写 `DSC*.ARW`，不经胶片管线。
 
-原 JPEG 细分项（如 `fine`/`standard`，由基础包决定）保留不变。
+原 JPEG 细分项（如 `fine`/`standard`，由 Ricoh v1.1.4 底座决定）保留不变。
 
 ## 数据流
 
@@ -67,5 +67,5 @@
 - 上游未处理：切换滤镜时画质选项是否被重置为 JPEG；录像模式下纯 RAW
   是否被原生互斥拒绝；`filterQualityAvailability` 是否在其他路径
   （如快门执行前的二次校验）被绕过。
-- 图标使用 `uncompressed_raw` 素材，若 A7R2 基础包不含该 drawable，
-  菜单项将无图标显示（不影响功能）。
+- 图标使用 `uncompressed_raw` 素材，若输入的 Ricoh v1.1.4 底座不含该
+  drawable，菜单项将无图标显示（不影响功能）。

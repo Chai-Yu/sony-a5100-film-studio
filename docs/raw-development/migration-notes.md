@@ -1,10 +1,18 @@
 # RAW 功能移植说明
 
-## 移植范围
+## 移植范围与输入前提
 
-只提取上游 v1.6.0 的 RAW 相关逻辑，不合并其余 Ricoh mod 改动。未执行
-`git merge`，未整文件复制 `RicohHook.smali`，未改动 `build_apk.py` 既有
-胶片模拟路径。
+`build_apk.py` 的输入 `--input inputs/base.apk` 是上游 **Ricoh mod v1.1.4 的
+成品 APK**（`PictureEffectPlus_Ricoh.apk`，SHA-256 `80cb4a54…`），而非 Sony
+官方原始应用——脚本反编译后直接 patch 其中已存在的 `RicohHook.smali` 与其余
+`pictureeffectplus` 类。本次移植（方案 B）保留这一输入前提不变，仅把上游
+v1.6.0 中**与 RAW 相关**的三处改动叠加进来，不合并 v1.6.0 的其它改动
+（理光 LUT 重写、菜单/触发器/安装脚本变更等），未执行 `git merge`，未整文件
+复制 `RicohHook.smali`，未改动 `build_apk.py` 既有胶片模拟路径。
+
+> 方案 A（改用 v1.6.0 成品 APK `5fc34156…` 作输入、把全套 A7R2 patch 适配到
+> v1.6.0）作为后续可研究的升级路线记录在 `upstream-analysis.md`，需要先对
+> v1.6.0 反编译产物做锚点存活率对比后再评估。
 
 ## 变更文件
 
