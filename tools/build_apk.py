@@ -78,6 +78,7 @@ def lookup_method(name, profiles, kind, movie=False):
     if kind in ('name', 'guide'):
         labels_map = {'ApplicationTop': ('胶片风格', '富士参考与理光风格；拍照和录像待机均可切换。')}
         labels_map.update(STRENGTH_LABELS)
+        labels_map.update(RAW_LABELS)
         if movie:
             labels_map.update(MOVIE_LABELS)
         for i, (key, labels) in enumerate(labels_map.items()):
@@ -693,6 +694,7 @@ def patch_hook(path,profiles,upstream_hook,movie=False,debug=False,native_previe
                       '    :no_native_effect_reset\n'+reset_anchor,1)
     text+='\n'+preset_ids(profiles)+'\n'+movie_hook()+'\n'+strength_methods(HOOK,CTRL)+'\n'
     text+='\n'+native_hook(HOOK,profiles,debug)+'\n'
+    text+='\n'+QUALITY_FILTER_METHOD+'\n'
     if movie and debug:
         # Pure diagnostics: keep them out of release builds, where they would
         # re-enter MovieFormatController from inside its own setValue().
@@ -870,6 +872,106 @@ def fix_menu_key_exit(layout,cls):
     layout.write_text(text.replace(method,method.replace(call,fixed)),encoding='utf-8')
 
 
+# RAW capture entries added under the still-image quality menu. ItemId/Value
+# follow the upstream Ricoh v1.6.0 scheme: the menu carries ItemId
+# setPictureStorageFormat_<fmt> while the controller receives the short Value.
+# Titles are written here as the static fallback; getFilterName/getFilterGuide
+# resolve the localized label for the same ItemId through lookup_method().
+RAW_MENU_ENTRIES = (
+    dict(item_id='setPictureStorageFormat_rawjpeg', value='rawjpeg',
+         title='RAW与JPEG',
+         caution='CAUTION_GRP_ID_STILL_IMAGE_QUALITY_RAW_JPEG_INVALID_GUIDE',
+         icon='drawable/p_16_dd_parts_5w_shoot_icon_imgquality_uncompressed_raw_j'),
+    dict(item_id='setPictureStorageFormat_raw', value='raw',
+         title='RAW',
+         caution='CAUTION_GRP_ID_STILL_IMAGE_QUALITY_RAW_INVALID_GUIDE',
+         icon='drawable/p_16_dd_parts_5w_shoot_icon_imgquality_uncompressed_raw'),
+)
+QUALITY_MENU_ID = 'setPictureStorageFormat'
+
+# Display labels for the two RAW entries, keyed by their ItemId - the same key
+# the menu layer hands to getFilterName()/getFilterGuide() for every other item.
+RAW_LABELS = {
+    'setPictureStorageFormat_rawjpeg': ('RAW与JPEG', '同时记录RAW图像和JPEG图像。'),
+    'setPictureStorageFormat_raw': ('RAW', '记录RAW图像。'),
+}
+
+# Upstream v1.6.0 RicohHook.filterQualityAvailability: force the two RAW quality
+# values to "available" whatever the body's own answer was, pass others through.
+QUALITY_FILTER_METHOD = f'''.method public static filterQualityAvailability(Ljava/lang/String;Z)Z
+    .locals 1
+    if-nez p1, :cond_orig_ok
+    const-string v0, "rawjpeg"
+    invoke-virtual {{v0, p0}}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v0
+    if-eqz v0, :cond_check_raw
+    const/4 v0, 0x1
+    return v0
+    :cond_check_raw
+    const-string v0, "raw"
+    invoke-virtual {{v0, p0}}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v0
+    if-eqz v0, :cond_orig_ok
+    const/4 v0, 0x1
+    return v0
+    :cond_orig_ok
+    return p1
+.end method'''
+
+
+def patch_quality_menu(base):
+    """Add RAW+JPEG and RAW to the still-image quality menu (upstream v1.6.0)."""
+    path = base/'assets/MenuData.xml'
+    tree = ET.parse(path)
+    layer1 = next((x for x in tree.iter()
+                   if x.tag == 'Layer1' and x.get('ItemId') == QUALITY_MENU_ID), None)
+    if layer1 is None:
+        raise ValueError('MenuData.xml has no Layer1 with ItemId=' + QUALITY_MENU_ID)
+    existing = {x.get('ItemId') for x in layer1}
+    added = []
+    for spec in RAW_MENU_ENTRIES:
+        if spec['item_id'] in existing:
+            continue
+        item = ET.SubElement(layer1, 'Layer2')
+        item.attrib.update(
+            CautionID=spec['caution'],
+            ConfigClass='com.sony.imaging.app.base.shooting.camera.PictureQualityController',
+            DisplayName=spec['title'], ExecType='SET_VALUE', GuideRes='',
+            IconRes=spec['icon'], ItemId=spec['item_id'],
+            SelectedIconRes=spec['icon'], TextRes='',
+            Title=spec['title'], Value=spec['value'])
+        added.append(spec['item_id'])
+    if added:
+        ET.indent(tree, space='    ')
+        tree.write(path, encoding='utf-8', xml_declaration=True)
+    return added
+
+
+def patch_quality_controller(base):
+    """Route PictureQualityController's availability answer through the hook.
+
+    The base app marks rawjpeg/raw unavailable for this generation; the hook
+    forces them on. Anchors on the single AvailableInfo.isAvailable call inside
+    getAvailableValue, matching upstream v1.6.0's patch_picture_quality_smali.
+    """
+    path = (base/'smali/com/sony/imaging/app/base/shooting/camera/'
+            'PictureQualityController.smali')
+    if not path.exists():
+        raise FileNotFoundError('PictureQualityController.smali not in base APK')
+    text = path.read_text(encoding='utf-8')
+    if 'filterQualityAvailability' in text:
+        return False  # already patched
+    anchor = ('    invoke-static {v6}, Lcom/sony/imaging/app/util/AvailableInfo;'
+              '->isAvailable([Ljava/lang/Object;)Z\n\n    move-result v6')
+    if text.count(anchor) != 1:
+        raise ValueError('PictureQualityController isAvailable anchor not unique/found')
+    injection = (anchor +
+        '\n\n    invoke-static {v3, v6}, ' + HOOK +
+        '->filterQualityAvailability(Ljava/lang/String;Z)Z\n\n    move-result v6')
+    path.write_text(text.replace(anchor, injection, 1), encoding='utf-8')
+    return True
+
+
 def patch_menu(base,profiles,debug=False,live=True,scrim_alpha=DEFAULT_MENU_SCRIM):
     path=base/'assets/MenuData.xml'
     tree=ET.parse(path)
@@ -886,6 +988,9 @@ def patch_menu(base,profiles,debug=False,live=True,scrim_alpha=DEFAULT_MENU_SCRI
                            ExecType='SET_VALUE',NextMenuID='')
         parent.append(item)
     tree.write(path,encoding='utf-8',xml_declaration=True)
+    # RAW+JPEG / RAW quality entries and the controller hook that unlocks them.
+    patch_quality_menu(base)
+    patch_quality_controller(base)
     patch_strength_menu(base, OLD+'.shooting.camera.PictureEffectPlusController')
     ctrl=base/'smali'/OLD.replace('.','/')/'shooting/camera/PictureEffectPlusController.smali'
     text=ctrl.read_text(encoding='utf-8')

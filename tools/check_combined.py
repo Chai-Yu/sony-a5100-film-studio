@@ -127,6 +127,20 @@ def main():
     ids = [p['id'] for p in profiles]
     assert [e.get('ItemId') for e in top] == ids
     assert [e.get('Value') for e in top] == ids
+    # RAW capture: the still-image quality menu must expose both new entries,
+    # carrying the short value the controller forwards to CameraSetting.
+    quality = next((e for e in menu.iter()
+                    if e.tag == 'Layer1' and e.get('ItemId') == 'setPictureStorageFormat'), None)
+    assert quality is not None, 'setPictureStorageFormat menu missing'
+    quality_items = {e.get('ItemId'): e.get('Value') for e in quality}
+    assert quality_items.get('setPictureStorageFormat_rawjpeg') == 'rawjpeg', \
+        'RAW+JPEG entry missing or wrong value'
+    assert quality_items.get('setPictureStorageFormat_raw') == 'raw', \
+        'RAW entry missing or wrong value'
+    for item_id in ('setPictureStorageFormat_rawjpeg', 'setPictureStorageFormat_raw'):
+        entry = next(e for e in quality if e.get('ItemId') == item_id)
+        assert entry.get('ConfigClass') == \
+            'com.sony.imaging.app.base.shooting.camera.PictureQualityController', item_id
     # Every preset needs a thumbnail that the base APK really defined, and the
     # menu entries must still carry the icon names the menu renderer reads.
     icons = icon_ids((args.decoded/LAYOUT_PATH).read_text(encoding='utf-8'))
@@ -155,6 +169,34 @@ def main():
         assert body, method
         for preset_id in ids:
             assert '"' + preset_id + '"' in body[1], (method, preset_id)
+    # The two RAW ItemIds must resolve to a label/guide like every other entry,
+    # so the quality menu shows a name instead of a blank or a raw token.
+    for item_id in ('setPictureStorageFormat_rawjpeg', 'setPictureStorageFormat_raw'):
+        name_body = method_body(hook, 'getFilterName')
+        guide_body = method_body(hook, 'getFilterGuide')
+        assert '"' + item_id + '"' in '\n'.join(name_body), ('getFilterName', item_id)
+        assert '"' + item_id + '"' in '\n'.join(guide_body), ('getFilterGuide', item_id)
+    # The quality-availability filter must exist exactly once, with the upstream
+    # signature, and must force both RAW values on while passing others through.
+    filters = re.findall(
+        r'^\.method public static filterQualityAvailability\(Ljava/lang/String;Z\)Z\n'
+        r'[\s\S]*?^\.end method', hook, re.M)
+    assert len(filters) == 1, 'filterQualityAvailability missing or duplicated'
+    fbody = filters[0]
+    assert '"rawjpeg"' in fbody and '"raw"' in fbody, 'RAW values not whitelisted'
+    assert 'return p1' in fbody, 'non-RAW values must pass the original answer through'
+    # The injection point in PictureQualityController must exist exactly once and
+    # call the hook after reading AvailableInfo's answer.
+    pqc_path = (args.decoded/'smali/com/sony/imaging/app/base/shooting/camera/'
+                'PictureQualityController.smali')
+    assert pqc_path.exists(), 'PictureQualityController.smali missing from build'
+    pqc = pqc_path.read_text(encoding='utf-8')
+    assert pqc.count('->filterQualityAvailability(') == 1, \
+        'filterQualityAvailability injection missing or duplicated'
+    assert re.search(r'->isAvailable\(\[Ljava/lang/Object;\)Z\s*\n\s*move-result v6\s*\n\s*'
+                     r'invoke-static \{v3, v6\}, [^\n]*->filterQualityAvailability'
+                     r'\(Ljava/lang/String;Z\)Z\s*\n\s*move-result v6', pqc), \
+        'filterQualityAvailability not wired after isAvailable'
     # Live preview: a body whose ISP drops the RGB matrix shows nothing from the
     # hardware look, and then the camera's own Creative Style and Picture Effect
     # are the only looks that reach the screen. Both tokens must be ones this
